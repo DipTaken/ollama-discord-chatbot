@@ -57,7 +57,9 @@ class Events(commands.Cog):
         if not message.content.strip():
             return
 
-        await run_ai_streaming(message, self.bot)
+        #use the session temperature if one was set, otherwise default
+        temp = config.session_temperatures.get(message.author.id, config.DEFAULT_TEMPERATURE)
+        await run_ai_streaming(message, self.bot, temperature=temp)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
@@ -101,13 +103,15 @@ class Events(commands.Cog):
                 await bot_message.edit(content="*Regenerating...*")
                 await bot_message.clear_reactions()
 
-                #track regen count per message and escalate temperature
+                #track regen count per message and escalate temperature from session base
                 count = config.regen_counts.get(bot_message.id, 0) + 1
                 config.regen_counts[bot_message.id] = count
                 #cap the dict at 200 entries to avoid unbounded growth
                 if len(config.regen_counts) > 200:
                     config.regen_counts.pop(next(iter(config.regen_counts)))
-                temperature = config.REGEN_TEMPS[min(count, len(config.REGEN_TEMPS) - 1)]
+                base_temp = config.session_temperatures.get(user_id, config.DEFAULT_TEMPERATURE)
+                offset = config.REGEN_OFFSETS[min(count, len(config.REGEN_OFFSETS) - 1)]
+                temperature = min(base_temp + offset, 2.0)
 
                 await run_ai_streaming(user_message, self.bot, existing_msg=bot_message, temperature=temperature)
 
@@ -123,9 +127,10 @@ class Events(commands.Cog):
                     return
 
                 #override_content tells the model to extend, but isn't saved to context
+                temp = config.session_temperatures.get(payload.user_id, config.DEFAULT_TEMPERATURE)
                 await run_ai_streaming(
                     user_message, self.bot,
-                    temperature=0.8,
+                    temperature=temp,
                     override_content="[Continue the scene from exactly where you left off. Extend naturally \u2014 do not repeat anything already said.]"
                 )
 
@@ -140,15 +145,23 @@ class Events(commands.Cog):
                 if payload.user_id != user_message.author.id:
                     return
 
-                #remove the last exchange from context, then delete both messages
                 user_id = user_message.author.id
                 persona = get_active_persona(user_id)
                 file_path = context_file_path(user_id, persona)
                 trim_last_exchange(file_path)
 
                 try:
+                    #find what message comes right before this bot message in the channel
+                    preceding_msg = None
+                    async for msg in channel.history(before=bot_message, limit=1):
+                        preceding_msg = msg
+
                     await bot_message.delete()
-                    await user_message.delete()
+
+                    #only delete the preceding message if it's from the user (not another bot reply)
+                    #this prevents orphaning the first bot response after a continue
+                    if preceding_msg and preceding_msg.author.id == user_id:
+                        await preceding_msg.delete()
                 except discord.Forbidden:
                     print("Missing 'Manage Messages' permission to delete user messages.")
                 except discord.NotFound:

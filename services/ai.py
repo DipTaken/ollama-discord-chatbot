@@ -18,7 +18,17 @@ async def send_opening(channel, user_id, persona):
     prompts = SystemPrompts()
     scenario = prompts.get_scenario(persona)
     if scenario:
-        await channel.send(f"*{scenario}*\n\u200b")
+        embed = discord.Embed(
+            description=scenario,
+            color=discord.Color.dark_purple()
+        )
+        avatar_path = f"assets/{persona}.jpg"
+        if os.path.exists(avatar_path):
+            file = discord.File(avatar_path, filename=f"{persona}.jpg")
+            embed.set_thumbnail(url=f"attachment://{persona}.jpg")
+            await channel.send(embed=embed, file=file)
+        else:
+            await channel.send(embed=embed)
 
     system_prompt = prompts.get_system_prompt(persona)
     context = [

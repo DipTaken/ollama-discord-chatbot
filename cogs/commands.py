@@ -214,6 +214,34 @@ class Commands(commands.Cog):
         )
 
 
+    @app_commands.command(name='temperature', description='Set the response temperature for this session')
+    @app_commands.guild_only()
+    @app_commands.describe(value='Temperature value (0.1 to 2.0). Leave empty to see current.')
+    async def temperature(self, interaction: discord.Interaction, value: float = None):
+        """sets or displays the session's default temperature.
+        higher = more creative/random, lower = more focused/predictable."""
+        if config.active_sessions.get(interaction.user.id) != interaction.channel.id:
+            await interaction.response.send_message("Use this inside your active session channel.", ephemeral=True)
+            return
+
+        #if no value given, just show the current temperature
+        if value is None:
+            current = config.session_temperatures.get(interaction.user.id, config.DEFAULT_TEMPERATURE)
+            await interaction.response.send_message(
+                f"Current temperature: **{current}**", ephemeral=True
+            )
+            return
+
+        if value < 0.1 or value > 2.0:
+            await interaction.response.send_message("Temperature must be between 0.1 and 2.0.", ephemeral=True)
+            return
+
+        config.session_temperatures[interaction.user.id] = value
+        await interaction.response.send_message(
+            f"Temperature set to **{value}**", ephemeral=True
+        )
+
+
 async def setup(bot):
     """called by bot.load_extension() to register this cog"""
     await bot.add_cog(Commands(bot))
