@@ -42,6 +42,8 @@ def trim_last_exchange(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         context = json.load(f)
     #pop assistant first, then user — they're always paired at the end
+
+
     if len(context) > 1 and context[-1].get('role') == 'assistant':
         context.pop()
     if len(context) > 1 and context[-1].get('role') == 'user':

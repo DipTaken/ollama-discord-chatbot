@@ -4,5 +4,6 @@ data/*
 assets/*
 !assets/.gitkeep
 characters.py
+indicators.py
 __pycache__/
 *.pyc

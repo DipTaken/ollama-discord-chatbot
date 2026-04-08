@@ -11,6 +11,7 @@ from services.context import (
     get_active_persona, load_context, save_context,
     context_file_path, estimate_tokens
 )
+from indicators import build_indicator_prompt, parse_indicators
 
 
 async def send_opening(channel, user_id, persona):
@@ -164,6 +165,12 @@ async def run_ai_streaming(message, bot, existing_msg=None, temperature=0.8, ove
                 context_list.append({'role': 'user', 'content': message.content})
                 model_context = context_list
 
+            #inject mood indicator instructions if any are enabled
+            user_indicators = config.mood_indicators.get(message.author.id, {})
+            indicator_prompt = build_indicator_prompt(user_indicators)
+            if indicator_prompt:
+                model_context = model_context + [{'role': 'system', 'content': indicator_prompt}]
+
             if current_message is None:
                 current_message = await message.reply("*Thinking...*")
 
@@ -186,18 +193,27 @@ async def run_ai_streaming(message, bot, existing_msg=None, temperature=0.8, ove
 
             #fix broken bold dialogue formatting from the model
             response = re.sub(r'(\*\*"[^"\n]*")\*(?!\*)', r'\1**', response)
-            if len(response) > 2000:
-                response = response[:1997] + "..."
-            await current_message.edit(content=response)
+
+            #parse and strip indicator tags, build display string
+            if user_indicators:
+                response, indicator_display = parse_indicators(response, user_indicators)
+            else:
+                indicator_display = ""
+
+            #save the clean response (without indicator display) to context
+            context_list.append({'role': 'assistant', 'content': response})
+            save_context(message.author.id, persona, context_list)
+
+            #append indicator display for the discord message only (not saved to context)
+            display_response = response + indicator_display
+            if len(display_response) > 2000:
+                display_response = display_response[:1997] + "..."
+            await current_message.edit(content=display_response)
 
             #add reaction controls: back, continue, regen
             await current_message.add_reaction("\u2b05\ufe0f")
             await current_message.add_reaction("\u25b6\ufe0f")
             await current_message.add_reaction("\U0001f504")
-
-            #save the assistant's response to disk (override_content is NOT saved)
-            context_list.append({'role': 'assistant', 'content': response})
-            save_context(message.author.id, persona, context_list)
         except Exception as e:
             print(f"[AI error]: {e}")
             error_text = "*Something went wrong \u2014 please try again.*"

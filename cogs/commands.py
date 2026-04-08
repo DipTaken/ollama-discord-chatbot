@@ -10,6 +10,7 @@ from prompts import SystemPrompts
 from services.context import get_active_persona, context_file_path, estimate_tokens
 from services.ai import send_opening
 from services.views import select_and_open_character_channel
+from indicators import INDICATOR_TYPES
 
 
 class Commands(commands.Cog):
@@ -240,6 +241,57 @@ class Commands(commands.Cog):
         await interaction.response.send_message(
             f"Temperature set to **{value}**", ephemeral=True
         )
+
+
+    @app_commands.command(name='mood_indicators', description='Toggle mood indicators on bot responses')
+    @app_commands.guild_only()
+    @app_commands.describe(indicator='Which indicator to toggle (leave empty to see all)')
+    async def mood_indicators(self, interaction: discord.Interaction, indicator: str = None):
+        """toggles individual mood indicators. the ai includes hidden tags in its
+        responses which get parsed and displayed as meters/text below the message."""
+        if config.active_sessions.get(interaction.user.id) != interaction.channel.id:
+            await interaction.response.send_message("Use this inside your active session channel.", ephemeral=True)
+            return
+
+        user_id = interaction.user.id
+        current = config.mood_indicators.get(user_id, {})
+
+        #no argument — show current state of all indicators
+        if indicator is None:
+            lines = []
+            for ind_type in INDICATOR_TYPES:
+                state = "on" if current.get(ind_type) else "off"
+                lines.append(f"**{ind_type}**: {state}")
+            await interaction.response.send_message(
+                "**Mood Indicators:**\n" + "\n".join(lines) + "\n\nUse `/mood_indicators <name>` to toggle.",
+                ephemeral=True
+            )
+            return
+
+        #validate the indicator name
+        indicator = indicator.lower().strip()
+        if indicator not in INDICATOR_TYPES:
+            await interaction.response.send_message(
+                f"Unknown indicator. Available: {', '.join(INDICATOR_TYPES)}", ephemeral=True
+            )
+            return
+
+        #toggle it
+        current[indicator] = not current.get(indicator, False)
+        config.mood_indicators[user_id] = current
+        state = "on" if current[indicator] else "off"
+        await interaction.response.send_message(
+            f"**{indicator}** is now **{state}**", ephemeral=True
+        )
+
+    @mood_indicators.autocomplete('indicator')
+    async def mood_indicators_autocomplete(self, interaction: discord.Interaction, current: str):
+        """autocomplete for indicator names"""
+        return [
+            app_commands.Choice(name=ind, value=ind)
+            for ind in INDICATOR_TYPES
+            if current.lower() in ind.lower()
+        ]
 
 
 async def setup(bot):

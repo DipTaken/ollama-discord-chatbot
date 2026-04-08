@@ -13,5 +13,6 @@ active_sessions = {}        #{user_id: channel_id}
 regen_counts = {}           #{bot_message_id: regen_count}
 current_avatar = None       #which character's avatar is currently loaded (avoids redundant api calls)
 session_temperatures = {}   #{user_id: float} — per-session temperature override
+mood_indicators = {}        #{user_id: {indicator_name: bool}} — per-user toggle state
 
 DEFAULT_TEMPERATURE = 0.8
