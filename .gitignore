@@ -1,6 +1,8 @@
 .env
-data/
-assets/
+data/*
+!data/.gitkeep
+assets/*
+!assets/.gitkeep
 characters.py
 __pycache__/
 *.pyc
