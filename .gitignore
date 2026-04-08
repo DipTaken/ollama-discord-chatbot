@@ -1,0 +1,6 @@
+.env
+data/
+assets/
+characters.py
+__pycache__/
+*.pyc
